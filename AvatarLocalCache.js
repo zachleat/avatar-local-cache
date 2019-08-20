@@ -24,6 +24,10 @@ class AvatarLocalCache {
 
 	fetchUrl(url, outputFileSlug) {
 		return new Promise((fetchResolve, fetchReject) => {
+			if(!url || !outputFileSlug) {
+				fetchReject(new Error("Bad `fetchUrl` usage in `avatar-local-cache`. Expects `fetchUrl(url, outputFileSlug)`"));
+			}
+
 			(url.startsWith("http:") ? http : https).request(url, (res) => {
 				const { statusCode } = res;
 
@@ -39,14 +43,12 @@ class AvatarLocalCache {
 
 				res.on("end", function() {
 					let promises = [];
-					let img = sharp(data.read()).resize(this.defaultWidth);
+					let img = sharp(data.read()).resize({ width: this.defaultWidth });
 
 					if(this.formats.indexOf("jpeg") > -1) {
 						let jpgPromise = new Promise((resolve, reject) => {
 							// http://sharp.pixelplumbing.com/en/stable/api-output/#jpeg
-							img.jpeg({
-									quality: 100
-								})
+							img.jpeg({ quality: 100 })
 								.toFile(`${outputFileSlug}.jpg`, (err, info) => {
 									if(err) {
 										fetchReject(err);
@@ -108,16 +110,14 @@ class AvatarLocalCache {
 					if(this.formats.indexOf("webp") > -1) {
 						let webpPromise = new Promise((resolve, reject) => {
 							// http://sharp.pixelplumbing.com/en/stable/api-output/#webp
-							img.webp({
-								lossless: true
-							})
-							.toFile(`${outputFileSlug}.webp`, (err, info) => {
-								if(err) {
-									fetchReject(err);
-								} else {
-									resolve(`${outputFileSlug}.webp`);
-								}
-							});
+							img.webp({ lossless: true })
+								.toFile(`${outputFileSlug}.webp`, (err, info) => {
+									if(err) {
+										fetchReject(err);
+									} else {
+										resolve(`${outputFileSlug}.webp`);
+									}
+								});
 						});
 
 						promises.push(webpPromise);
