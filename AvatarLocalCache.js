@@ -23,6 +23,7 @@ class AvatarLocalCache {
 	}
 
 	fetchUrl(url, outputFileSlug) {
+		let width = this.width;
 		return new Promise((fetchResolve, fetchReject) => {
 			if(!url || !outputFileSlug) {
 				fetchReject(new Error("Bad `fetchUrl` usage in `avatar-local-cache`. Expects `fetchUrl(url, outputFileSlug)`"));
@@ -43,7 +44,7 @@ class AvatarLocalCache {
 
 				res.on("end", function() {
 					let promises = [];
-					let img = sharp(data.read()).resize({ width: this.defaultWidth });
+					let img = sharp(data.read()).resize({ width: width });
 
 					if(this.formats.indexOf("jpeg") > -1) {
 						let jpgPromise = new Promise((resolve, reject) => {
