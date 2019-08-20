@@ -1,12 +1,12 @@
 {
   "name": "avatar-local-cache",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
   "main": "AvatarLocalCache.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": ["avatar"],
   "author": "",
   "license": "MIT",
   "dependencies": {
