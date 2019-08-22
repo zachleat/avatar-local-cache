@@ -12,6 +12,7 @@ class AvatarLocalCache {
 	constructor() {
 		this.width = 120;
 		this._formats = ["jpeg", "png", "webp"];
+		this._onlyKeepSmallestFormats = true;
 	}
 
 	get formats() {
@@ -20,6 +21,25 @@ class AvatarLocalCache {
 
 	set formats(formats) {
 		this._formats = formats;
+	}
+
+	get onlyKeepSmallestFormats() {
+		return this._onlyKeepSmallestFormats;
+	}
+
+	set onlyKeepSmallestFormats(value) {
+		this._onlyKeepSmallestFormats = value;
+	}
+
+	static getReturnObject(path) {
+		let stats = fs.statSync(path);
+		return {
+			path: path,
+			size: stats.size,
+			toString: function() {
+				return `${path} (${Math.floor(stats.size/1000)}KB)`;
+			}
+		};
 	}
 
 	fetchUrl(url, outputFileSlug) {
@@ -64,7 +84,7 @@ class AvatarLocalCache {
 													if(err) {
 														fetchReject(err);
 													} else {
-														resolve(`${outputFileSlug}.jpg`);
+														resolve(AvatarLocalCache.getReturnObject(`${outputFileSlug}.jpg`));
 													}
 												});
 											}
@@ -96,7 +116,7 @@ class AvatarLocalCache {
 													if(err) {
 														fetchReject(err);
 													} else {
-														resolve(`${outputFileSlug}.png`);
+														resolve(AvatarLocalCache.getReturnObject(`${outputFileSlug}.png`));
 													}
 												});
 											}
@@ -116,7 +136,7 @@ class AvatarLocalCache {
 									if(err) {
 										fetchReject(err);
 									} else {
-										resolve(`${outputFileSlug}.webp`);
+										resolve(AvatarLocalCache.getReturnObject(`${outputFileSlug}.webp`));
 									}
 								});
 						});
@@ -125,8 +145,38 @@ class AvatarLocalCache {
 					}
 
 					Promise.all(promises).then(function(files) {
-						fetchResolve(files);
-					});
+						let sorted = files.sort(function(a, b) {
+							return a.size - b.size;
+						});
+
+						if(this.onlyKeepSmallestFormats) {
+							// remove webp if it’s not the smallest
+							if(!sorted[0].path.endsWith(".webp")) {
+								sorted = sorted.filter(function(entry) {
+									if(entry.path.endsWith(".webp")) {
+										fs.unlink(entry.path, (err) => {
+											if (err) throw err;
+										});
+										return false;
+									} else {
+										return true;
+									}
+								});
+							}
+
+							// remove the biggest of png/jpg
+							if( sorted.filter(function(entry) {
+								return entry.path.endsWith(".jpg") || entry.path.endsWith(".png");
+							}).length >= 2 ) {
+								let cut = sorted.pop();
+								fs.unlink(cut.path, (err) => {
+									if (err) throw err;
+								});
+							}
+						}
+
+						fetchResolve(sorted);
+					}.bind(this));
 				}.bind(this));
 			}).end();
 		});

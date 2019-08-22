@@ -4,6 +4,7 @@ Saves a image URL for an avatar to the local file system (and optimizes the imag
 
 * Workaround for large avatar images on hosted services.
 * Image URLs won’t break in the future.
+* Only keeps the smallest images (`webp` if smallest and one of `jpg` or `png`)
 
 ## Install
 
@@ -13,17 +14,30 @@ npm install avatar-local-cache
 
 ## Usage
 
+The default behavior will only keep `webp` if it has the smallest file size and then will pick one of `jpg` or `png` based on which one is the smallest of the two. To disable this, see the `Keep all formats` example below.
+
 ```js
 const AvatarLocalCache = require("avatar-local-cache");
 
 let cache = new AvatarLocalCache();
-cache.fetchUrl("https://www.gravatar.com/avatar/10ca8fcb1f434f8929dca2a8867fb71d?default=404", "philhawksworth").then(function(files) {
-    console.log( `Wrote ${files.join(", ")}.` );
+cache.fetchUrl("https://opencollective-production.[…].jpeg", "nhoizey").then(function(files) {
+    console.log( `Wrote ${files.map(entry => entry.path).join(", ")}.` );
 });
 ```
 
-Outputs:
+The above writes three files but only keeps one: `nhoizey.webp` (20KB), `nhoizey.jpg` (22KB), and `nhoizey.png` (9KB).
 
+1. It only keeps the `webp` file if it is the smallest (it is not).
+2. It then picks the smaller of the `jpg` and the `png` (in this case, the `png` wins by 13KB).
+
+This allows you to iterate over the object returned from the promise to create an `img` (if only one source remains) or a `picture` element (if the `webp` survived alongside a `jpg` or `png`).
+
+### Keep all formats
+
+To disable this file size comparison and file pruning, just set `onlyKeepSmallestFormats` to false.
+
+```js
+let cache = new AvatarLocalCache();
+cache.onlyKeepSmallestFormats = false;
 ```
-Wrote philhawksworth.jpg, philhawksworth.png, philhawksworth.webp.
-```
+
