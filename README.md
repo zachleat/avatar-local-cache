@@ -1,4 +1,4 @@
-# Avatar Sample Cache
+# Avatar Local Cache
 
 Saves a image URL for an avatar to the local file system (and optimizes the image).
 
