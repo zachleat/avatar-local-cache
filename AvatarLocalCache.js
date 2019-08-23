@@ -1,7 +1,6 @@
-const http = require("http");
-const https = require("https");
+const path = require("path");
 const fs = require("fs");
-const Stream = require("stream").Transform;
+const fetch = require("node-fetch");
 const sharp = require("sharp");
 
 const imagemin = require("imagemin");
@@ -31,13 +30,15 @@ class AvatarLocalCache {
 		this._onlyKeepSmallestFormats = value;
 	}
 
-	static getReturnObject(path) {
-		let stats = fs.statSync(path);
+	static getReturnObject(stem, extension) {
+		let fullPath = `${stem}.${extension}`;
+		let stats = fs.statSync(fullPath);
 		return {
-			path: path,
+			name: path.parse(fullPath).name,
+			path: fullPath,
 			size: stats.size,
 			toString: function() {
-				return `${path} (${Math.floor(stats.size/1000)}KB)`;
+				return `${fullPath} (${Math.floor(stats.size/1000)}KB)`;
 			}
 		};
 	}
@@ -49,136 +50,125 @@ class AvatarLocalCache {
 				fetchReject(new Error("Bad `fetchUrl` usage in `avatar-local-cache`. Expects `fetchUrl(url, outputFileSlug)`"));
 			}
 
-			(url.startsWith("http:") ? http : https).request(url, (res) => {
-				const { statusCode } = res;
 
-				if (statusCode !== 200) {
-					res.resume();
-					fetchReject(new Error(`AvatarLocalCache request failed. Status Code: ${statusCode}`));
+			fetch(url).catch(function(error) {
+				fetchReject(`Url: ${url}\nError: ${error}`);
+			}).then(res => res.buffer()).then(function(body) {
+				let promises = [];
+				let img = sharp(body).resize({ width: width });
+
+				if(this.formats.indexOf("jpeg") > -1) {
+					let jpgPromise = new Promise((resolve, reject) => {
+						// http://sharp.pixelplumbing.com/en/stable/api-output/#jpeg
+						img.jpeg({ quality: 100 })
+							.toFile(`${outputFileSlug}.jpg`, (err, info) => {
+								if(err) {
+									fetchReject(`Url: ${url}\nError: ${err}`);
+								} else {
+									imagemin([`${outputFileSlug}.jpg`], {
+										plugins: [
+											imageminJpegtran()
+										]
+									}).then(files => {
+										for(let file of files) {
+											fs.writeFile(`${outputFileSlug}.jpg`, file.data, err => {
+												if(err) {
+													fetchReject(`Url: ${url}\nError: ${err}`);
+												} else {
+													resolve(AvatarLocalCache.getReturnObject(outputFileSlug, "jpg"));
+												}
+											});
+										}
+									});
+								}
+							});
+					});
+
+					promises.push(jpgPromise);
 				}
 
-				let data = new Stream();
-				res.on("data", (chunk) => {
-					data.push(chunk);
-				});
+				if(this.formats.indexOf("png") > -1) {
+					let pngPromise = new Promise((resolve, reject) => {
+						// http://sharp.pixelplumbing.com/en/stable/api-output/#png
+						img.png()
+							.toFile(`${outputFileSlug}.png`, (err, info) => {
+								if(err) {
+									fetchReject(`Url: ${url}\nError: ${err}`);
+								} else {
+									// console.log( `Wrote ${outputFileSlug}.png` );
 
-				res.on("end", function() {
-					let promises = [];
-					let img = sharp(data.read()).resize({ width: width });
+									imagemin([`${outputFileSlug}.png`], {
+										plugins: [
+											imageminPngquant()
+										]
+									}).then(files => {
+										for(let file of files) {
+											fs.writeFile(`${outputFileSlug}.png`, file.data, err => {
+												if(err) {
+													fetchReject(`Url: ${url}\nError: ${err}`);
+												} else {
+													resolve(AvatarLocalCache.getReturnObject(outputFileSlug, "png"));
+												}
+											});
+										}
+									});
+								}
+							});
+					});
 
-					if(this.formats.indexOf("jpeg") > -1) {
-						let jpgPromise = new Promise((resolve, reject) => {
-							// http://sharp.pixelplumbing.com/en/stable/api-output/#jpeg
-							img.jpeg({ quality: 100 })
-								.toFile(`${outputFileSlug}.jpg`, (err, info) => {
-									if(err) {
-										fetchReject(err);
-									} else {
-										imagemin([`${outputFileSlug}.jpg`], {
-											plugins: [
-												imageminJpegtran()
-											]
-										}).then(files => {
-											for(let file of files) {
-												fs.writeFile(`${outputFileSlug}.jpg`, file.data, err => {
-													if(err) {
-														fetchReject(err);
-													} else {
-														resolve(AvatarLocalCache.getReturnObject(`${outputFileSlug}.jpg`));
-													}
-												});
-											}
-										});
-									}
-								});
-						});
+					promises.push(pngPromise);
+				}
 
-						promises.push(jpgPromise);
-					}
+				if(this.formats.indexOf("webp") > -1) {
+					let webpPromise = new Promise((resolve, reject) => {
+						// http://sharp.pixelplumbing.com/en/stable/api-output/#webp
+						img.webp({ lossless: true })
+							.toFile(`${outputFileSlug}.webp`, (err, info) => {
+								if(err) {
+									fetchReject(`Url: ${url}\nError: ${err}`);
+								} else {
+									resolve(AvatarLocalCache.getReturnObject(outputFileSlug, "webp"));
+								}
+							});
+					});
 
-					if(this.formats.indexOf("png") > -1) {
-						let pngPromise = new Promise((resolve, reject) => {
-							// http://sharp.pixelplumbing.com/en/stable/api-output/#png
-							img.png()
-								.toFile(`${outputFileSlug}.png`, (err, info) => {
-									if(err) {
-										fetchReject(err);
-									} else {
-										// console.log( `Wrote ${outputFileSlug}.png` );
+					promises.push(webpPromise);
+				}
 
-										imagemin([`${outputFileSlug}.png`], {
-											plugins: [
-												imageminPngquant()
-											]
-										}).then(files => {
-											for(let file of files) {
-												fs.writeFile(`${outputFileSlug}.png`, file.data, err => {
-													if(err) {
-														fetchReject(err);
-													} else {
-														resolve(AvatarLocalCache.getReturnObject(`${outputFileSlug}.png`));
-													}
-												});
-											}
-										});
-									}
-								});
-						});
+				Promise.all(promises).then(function(files) {
+					let sorted = files.sort(function(a, b) {
+						return a.size - b.size;
+					});
 
-						promises.push(pngPromise);
-					}
-
-					if(this.formats.indexOf("webp") > -1) {
-						let webpPromise = new Promise((resolve, reject) => {
-							// http://sharp.pixelplumbing.com/en/stable/api-output/#webp
-							img.webp({ lossless: true })
-								.toFile(`${outputFileSlug}.webp`, (err, info) => {
-									if(err) {
-										fetchReject(err);
-									} else {
-										resolve(AvatarLocalCache.getReturnObject(`${outputFileSlug}.webp`));
-									}
-								});
-						});
-
-						promises.push(webpPromise);
-					}
-
-					Promise.all(promises).then(function(files) {
-						let sorted = files.sort(function(a, b) {
-							return a.size - b.size;
-						});
-
-						if(this.onlyKeepSmallestFormats) {
-							// remove webp if it’s not the smallest
-							if(!sorted[0].path.endsWith(".webp")) {
-								sorted = sorted.filter(function(entry) {
-									if(entry.path.endsWith(".webp")) {
-										fs.unlink(entry.path, (err) => {
-											if (err) throw err;
-										});
-										return false;
-									} else {
-										return true;
-									}
-								});
-							}
-
-							// remove the biggest of png/jpg
-							if( sorted.filter(function(entry) {
-								return entry.path.endsWith(".jpg") || entry.path.endsWith(".png");
-							}).length >= 2 ) {
-								let cut = sorted.pop();
-								fs.unlink(cut.path, (err) => {
-									if (err) throw err;
-								});
-							}
+					if(this.onlyKeepSmallestFormats) {
+						// remove webp if it’s not the smallest
+						if(!sorted[0].path.endsWith(".webp")) {
+							sorted = sorted.filter(function(entry) {
+								if(entry.path.endsWith(".webp")) {
+									fs.unlink(entry.path, (err) => {
+										if (err) throw err;
+									});
+									return false;
+								} else {
+									return true;
+								}
+							});
 						}
 
-						fetchResolve(sorted);
-					}.bind(this));
+						// remove the biggest of png/jpg
+						if( sorted.filter(function(entry) {
+							return entry.path.endsWith(".jpg") || entry.path.endsWith(".png");
+						}).length >= 2 ) {
+							let cut = sorted.pop();
+							fs.unlink(cut.path, (err) => {
+								if (err) throw err;
+							});
+						}
+					}
+
+					fetchResolve(sorted);
 				}.bind(this));
-			}).end();
+			}.bind(this));
 		});
 	}
 }
