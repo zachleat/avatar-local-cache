@@ -55,7 +55,7 @@ class AvatarLocalCache {
 				fetchReject(`Url: ${url}\nError: ${error}`);
 			}).then(res => res.buffer()).then(function(body) {
 				let promises = [];
-				let img = sharp(body).resize({ width: width });
+				let img = sharp(body).resize({ width: width, withoutEnlargement: true });
 
 				if(this.formats.indexOf("jpeg") > -1) {
 					let jpgPromise = new Promise((resolve, reject) => {
