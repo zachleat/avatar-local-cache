@@ -1,6 +1,6 @@
 # Avatar Local Cache
 
-Saves a image URL for an avatar to the local file system (and optimizes the image).
+Saves a image URL for an avatar to the local file system (and optimizes the image). Read the [blog post that inspired this utility: A Featherweight Facepile](https://www.zachleat.com/web/featherweight-facepile/).
 
 * Workaround for large avatar images on hosted services.
 * Image URLs won’t break in the future.
