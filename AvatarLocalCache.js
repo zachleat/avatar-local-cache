@@ -50,62 +50,67 @@ class AvatarLocalCache {
 				fetchReject(new Error("Bad `fetchUrl` usage in `avatar-local-cache`. Expects `fetchUrl(url, outputFileSlug)`"));
 			}
 
-
 			fetch(url).catch(function(error) {
 				fetchReject(`Url: ${url}\nError: ${error}`);
-			}).then(res => res.buffer()).then(function(body) {
-				let promises = [];
-				let img = sharp(body).resize({ width: width, withoutEnlargement: true });
-				img.metadata().catch(function(error) {
-					fetchReject(`Url: ${url}\nError: ${error}`);
-				}).then(function(metadata) {
-					if(this.formats.indexOf("jpeg") > -1) {
-						let jpgPromise = new Promise((resolve, reject) => {
-							// http://sharp.pixelplumbing.com/en/stable/api-output/#jpeg
-							let jpeg;
-							if(metadata.format !== "jpeg") {
-								jpeg = img.jpeg();
-							} else {
-								jpeg = img;
-							}
+			}).then(function(res) {
+				if(!res.ok) {
+					fetchReject(new Error(`Bad status code for ${url} (${res.status}): ${res.statusText}`));
+					return;
+				}
 
-							jpeg.toFile(`${outputFileSlug}.jpg`, (err, info) => {
-									if(err) {
-										fetchReject(`Url: ${url}\nError: ${err}`);
-									} else {
-										imagemin([`${outputFileSlug}.jpg`], {
-											plugins: [
-												imageminJpegtran()
-											]
-										}).then(files => {
-											for(let file of files) {
-												fs.writeFile(`${outputFileSlug}.jpg`, file.data, err => {
-													if(err) {
-														fetchReject(`Url: ${url}\nError: ${err}`);
-													} else {
-														resolve(AvatarLocalCache.getReturnObject(outputFileSlug, "jpg"));
-													}
-												});
-											}
-										});
-									}
-								});
-						});
+				res.buffer().then(body => {
+					let promises = [];
+					let img = sharp(body).resize({ width: width, withoutEnlargement: true });
+					img.metadata().catch(function(error) {
+						fetchReject(`Url: ${url}\nError: ${error}`);
+					}).then(function(metadata) {
+						if(this.formats.indexOf("jpeg") > -1) {
+							let jpgPromise = new Promise((resolve, reject) => {
+								// http://sharp.pixelplumbing.com/en/stable/api-output/#jpeg
+								let jpeg;
+								if(metadata.format !== "jpeg") {
+									jpeg = img.jpeg();
+								} else {
+									jpeg = img;
+								}
 
-						promises.push(jpgPromise);
-					}
+								jpeg.toFile(`${outputFileSlug}.jpg`, (err, info) => {
+										if(err) {
+											fetchReject(`Url: ${url}\nError: ${err}`);
+										} else {
+											imagemin([`${outputFileSlug}.jpg`], {
+												plugins: [
+													imageminJpegtran()
+												]
+											}).then(files => {
+												for(let file of files) {
+													fs.writeFile(`${outputFileSlug}.jpg`, file.data, err => {
+														if(err) {
+															fetchReject(`Url: ${url}\nError: ${err}`);
+														} else {
+															resolve(AvatarLocalCache.getReturnObject(outputFileSlug, "jpg"));
+														}
+													});
+												}
+											});
+										}
+									});
+							});
 
-					if(this.formats.indexOf("png") > -1) {
-						let pngPromise = new Promise((resolve, reject) => {
-							// http://sharp.pixelplumbing.com/en/stable/api-output/#png
-							let png;
-							if(metadata.format !== "png") {
-								png = img.png();
-							} else {
-								png = img;
-							}
+							promises.push(jpgPromise);
+						}
 
-							png.toFile(`${outputFileSlug}.png`, (err, info) => {
+						if(this.formats.indexOf("png") > -1) {
+							let pngPromise = new Promise((resolve, reject) => {
+								// http://sharp.pixelplumbing.com/en/stable/api-output/#png
+								let png;
+								if(metadata.format !== "png") {
+									png = img.png();
+								} else {
+									png = img;
+								}
+
+								png.toFile(`${outputFileSlug}.png`, (err, info) => {
 									if(err) {
 										fetchReject(`Url: ${url}\nError: ${err}`);
 									} else {
@@ -128,69 +133,70 @@ class AvatarLocalCache {
 										});
 									}
 								});
-						});
+							});
 
-						promises.push(pngPromise);
-					}
+							promises.push(pngPromise);
+						}
 
-					if(this.formats.indexOf("webp") > -1) {
-						let webpPromise = new Promise((resolve, reject) => {
-							// http://sharp.pixelplumbing.com/en/stable/api-output/#webp
-							let webp;
-							if(metadata.format !== "webp") {
-								webp = img.webp();
-							} else {
-								webp = img;
-							}
+						if(this.formats.indexOf("webp") > -1) {
+							let webpPromise = new Promise((resolve, reject) => {
+								// http://sharp.pixelplumbing.com/en/stable/api-output/#webp
+								let webp;
+								if(metadata.format !== "webp") {
+									webp = img.webp();
+								} else {
+									webp = img;
+								}
 
-							webp.toFile(`${outputFileSlug}.webp`, (err, info) => {
+								webp.toFile(`${outputFileSlug}.webp`, (err, info) => {
 									if(err) {
 										fetchReject(`Url: ${url}\nError: ${err}`);
 									} else {
 										resolve(AvatarLocalCache.getReturnObject(outputFileSlug, "webp"));
 									}
 								});
-						});
+							});
 
-						promises.push(webpPromise);
-					}
-
-					Promise.all(promises).then(function(files) {
-						let sorted = files.sort(function(a, b) {
-							return a.size - b.size;
-						});
-
-						if(this.onlyKeepSmallestFormats) {
-							// remove webp if it’s not the smallest
-							if(!sorted[0].path.endsWith(".webp")) {
-								sorted = sorted.filter(function(entry) {
-									if(entry.path.endsWith(".webp")) {
-										fs.unlink(entry.path, (err) => {
-											if (err) throw err;
-										});
-										return false;
-									} else {
-										return true;
-									}
-								});
-							}
-
-							// remove the biggest of png/jpg
-							if( sorted.filter(function(entry) {
-								return entry.path.endsWith(".jpg") || entry.path.endsWith(".png");
-							}).length >= 2 ) {
-								let cut = sorted.pop();
-								fs.unlink(cut.path, (err) => {
-									if (err) throw err;
-								});
-							}
+							promises.push(webpPromise);
 						}
 
-						fetchResolve(sorted);
+						Promise.all(promises).then(function(files) {
+							let sorted = files.sort(function(a, b) {
+								return a.size - b.size;
+							});
 
-					}.bind(this));
+							if(this.onlyKeepSmallestFormats) {
+								// remove webp if it’s not the smallest
+								if(!sorted[0].path.endsWith(".webp")) {
+									sorted = sorted.filter(function(entry) {
+										if(entry.path.endsWith(".webp")) {
+											fs.unlink(entry.path, (err) => {
+												if (err) throw err;
+											});
+											return false;
+										} else {
+											return true;
+										}
+									});
+								}
 
-				}.bind(this)); // .metadata
+								// remove the biggest of png/jpg
+								if( sorted.filter(function(entry) {
+									return entry.path.endsWith(".jpg") || entry.path.endsWith(".png");
+								}).length >= 2 ) {
+									let cut = sorted.pop();
+									fs.unlink(cut.path, (err) => {
+										if (err) throw err;
+									});
+								}
+							}
+
+							fetchResolve(sorted);
+
+						}.bind(this));
+
+					}.bind(this)); // .metadata
+				}); // buffer
 			}.bind(this));
 		});
 	}
