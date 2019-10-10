@@ -30,17 +30,26 @@ class AvatarLocalCache {
 		this._onlyKeepSmallestFormats = value;
 	}
 
-	static getReturnObject(stem, extension) {
+	async getReturnObject(stem, extension) {
 		let fullPath = `${stem}.${extension}`;
-		let stats = fs.statSync(fullPath);
-		return {
+		let stats = await new Promise((resolve, reject) => {
+			fs.stat(fullPath, function(err, stats) {
+				if(err) {
+					reject(err);
+				}
+				resolve(stats);
+			});
+		});
+		let metadata = await sharp(fullPath).metadata();
+
+		return Object.assign(metadata, {
 			name: path.parse(fullPath).name,
 			path: fullPath,
 			size: stats.size,
 			toString: function() {
-				return `${fullPath} (${Math.floor(stats.size/1000)}KB)`;
+				return `${fullPath} (${(stats.size/1000).toFixed(2)}KB)`;
 			}
-		};
+		});
 	}
 
 	fetchUrl(url, outputFileSlug) {
@@ -75,26 +84,28 @@ class AvatarLocalCache {
 								}
 
 								jpeg.toFile(`${outputFileSlug}.jpg`, (err, info) => {
-										if(err) {
-											fetchReject(`Url: ${url}\nError: ${err}`);
-										} else {
-											imagemin([`${outputFileSlug}.jpg`], {
-												plugins: [
-													imageminJpegtran()
-												]
-											}).then(files => {
-												for(let file of files) {
-													fs.writeFile(`${outputFileSlug}.jpg`, file.data, err => {
-														if(err) {
-															fetchReject(`Url: ${url}\nError: ${err}`);
-														} else {
-															resolve(AvatarLocalCache.getReturnObject(outputFileSlug, "jpg"));
-														}
-													});
-												}
-											});
-										}
-									});
+									if(err) {
+										fetchReject(`Url: ${url}\nError: ${err}`);
+									} else {
+										imagemin([`${outputFileSlug}.jpg`], {
+											plugins: [
+												imageminJpegtran()
+											]
+										}).then(files => {
+											for(let file of files) {
+												fs.writeFile(`${outputFileSlug}.jpg`, file.data, err => {
+													if(err) {
+														fetchReject(`Url: ${url}\nError: ${err}`);
+													} else {
+														this.getReturnObject(outputFileSlug, "jpg").then(function(returnData) {
+															resolve(returnData);
+														});
+													}
+												});
+											}
+										});
+									}
+								});
 							});
 
 							promises.push(jpgPromise);
@@ -126,7 +137,9 @@ class AvatarLocalCache {
 													if(err) {
 														fetchReject(`Url: ${url}\nError: ${err}`);
 													} else {
-														resolve(AvatarLocalCache.getReturnObject(outputFileSlug, "png"));
+														this.getReturnObject(outputFileSlug, "png").then(function(returnData) {
+															resolve(returnData);
+														});
 													}
 												});
 											}
@@ -152,7 +165,9 @@ class AvatarLocalCache {
 									if(err) {
 										fetchReject(`Url: ${url}\nError: ${err}`);
 									} else {
-										resolve(AvatarLocalCache.getReturnObject(outputFileSlug, "webp"));
+										this.getReturnObject(outputFileSlug, "webp").then(function(returnData) {
+											resolve(returnData);
+										});
 									}
 								});
 							});
