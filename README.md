@@ -32,6 +32,28 @@ The above writes three files but only keeps one: `nhoizey.webp` (20KB), `nhoizey
 
 This allows you to iterate over the object returned from the promise to create an `img` (if only one source remains) or a `picture` element (if the `webp` survived alongside a `jpg` or `png`).
 
+### Image Maximum Width
+
+Images will be resized down to this width. Images smaller than this width will not be resized.
+
+```js
+let cache = new AvatarLocalCache();
+cache.width = 400;
+```
+
+### Change formats
+
+```js
+let cache = new AvatarLocalCache();
+cache.formats = ["jpeg"];
+
+// or
+cache.formats = ["png"];
+
+// or (order doesn’t matter)
+cache.formats = ["webp", "jpeg"];
+```
+
 ### Keep all formats
 
 To disable this file size comparison and file pruning, just set `onlyKeepSmallestFormats` to false.
@@ -39,5 +61,16 @@ To disable this file size comparison and file pruning, just set `onlyKeepSmalles
 ```js
 let cache = new AvatarLocalCache();
 cache.onlyKeepSmallestFormats = false;
+```
+
+### Skip Metadata
+
+_Added in 2.0.6_
+
+Faster. Won’t return size or `sharp` metadata.
+
+```js
+let cache = new AvatarLocalCache();
+cache.skipMetadata = true;
 ```
 

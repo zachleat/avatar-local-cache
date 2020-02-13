@@ -12,6 +12,7 @@ class AvatarLocalCache {
 		this.width = 120;
 		this._formats = ["jpeg", "png", "webp"];
 		this._onlyKeepSmallestFormats = true;
+		this._skipMetadata = false;
 	}
 
 	get formats() {
@@ -30,8 +31,29 @@ class AvatarLocalCache {
 		this._onlyKeepSmallestFormats = value;
 	}
 
+	get skipMetadata() {
+		return this._skipMetadata;
+	}
+
+	set skipMetadata(value) {
+		this._skipMetadata = value;
+	}
+
 	async getReturnObject(stem, extension) {
 		let fullPath = `${stem}.${extension}`;
+		let standardObj = {
+			extension: extension,
+			name: path.parse(fullPath).name,
+			path: fullPath,
+			toString: function() {
+				return fullPath;
+			}
+		}
+
+		if(this.skipMetadata) {
+			return standardObj;
+		}
+
 		let stats = await new Promise((resolve, reject) => {
 			fs.stat(fullPath, function(err, stats) {
 				if(err) {
@@ -42,9 +64,7 @@ class AvatarLocalCache {
 		});
 		let metadata = await sharp(fullPath).metadata();
 
-		return Object.assign(metadata, {
-			name: path.parse(fullPath).name,
-			path: fullPath,
+		return Object.assign(metadata, standardObj, {
 			size: stats.size,
 			toString: function() {
 				return `${fullPath} (${(stats.size/1000).toFixed(2)}KB)`;
@@ -176,9 +196,23 @@ class AvatarLocalCache {
 						}
 
 						Promise.all(promises).then(function(files) {
-							let sorted = files.sort(function(a, b) {
-								return a.size - b.size;
-							});
+							let sorted;
+							if(this.skipMetadata) {
+								// webp should always be first
+								sorted = files.sort((a, b) => {
+									if(a.extension === "webp") {
+										return -1;
+									} else if(b.extension === "webp") {
+										return 1;
+									} else {
+										return 0;
+									}
+								});
+							} else {
+								sorted = files.sort(function(a, b) {
+									return a.size - b.size;
+								});
+							}
 
 							if(this.onlyKeepSmallestFormats) {
 								// remove webp if it’s not the smallest
@@ -196,6 +230,8 @@ class AvatarLocalCache {
 								}
 
 								// remove the biggest of png/jpg
+								// note: if metadata is skipped and size was not available
+								// a random one is removed (if both are eligible)
 								if( sorted.filter(function(entry) {
 									return entry.path.endsWith(".jpg") || entry.path.endsWith(".png");
 								}).length >= 2 ) {

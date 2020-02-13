@@ -11,11 +11,16 @@ let cache = new AvatarLocalCache();
 // 	console.log( `Wrote ${files.join(", ")}.` );
 // });
 
+// cache.skipMetadata = true;
+// cache.formats = "jpeg,webp"; // should result in webp,png order
+
 cache.fetchUrl("https://twitter.com/zachleat/profile_image?size=bigger", "zachleat").then(function(files) {
 	console.log( files );
 	console.log( `Wrote ${files.join(", ")}.` );
 });
 
-cache.fetchUrl("https://pbs.twimg.com/media/D-Fhb7GWsAMSRRC.png", "broken-url").catch(e => {
-	console.log( "THIS ERROR IS INTENTIONAL", e.message );
-});
+// this url started working again :D
+// cache.fetchUrl("https://pbs.twimg.com/media/D-Fhb7GWsAMSRRC.png", "broken-url").catch(e => {
+// 	console.log( files );
+// 	console.log( "THIS ERROR IS INTENTIONAL", e.message );
+// });
