@@ -1,5 +1,13 @@
 # Avatar Local Cache
 
+This project has been retired and is replaced by:
+
+* [IndieWeb Avatar](https://www.zachleat.com/web/indieweb-avatar/)
+* [Eleventy Image](https://www.11ty.dev/docs/plugins/image/)
+* [Twitter Avatar URL](https://github.com/zachleat/twitter-avatar-url)
+
+---
+
 Saves a image URL for an avatar to the local file system (and optimizes the image). Read the [blog post that inspired this utility: A Featherweight Facepile](https://www.zachleat.com/web/featherweight-facepile/).
 
 * Workaround for large avatar images on hosted services.
